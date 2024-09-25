@@ -1,8 +1,6 @@
 ﻿  The vcpkg manifest was disabled, but we found a manifest file in C:\Users\albinhasanaj.blom\Desktop\Prog1\OpenGL\OpenGL\. You may want to enable vcpkg manifests in your properties page or pass /p:VcpkgEnableManifest=true to the msbuild invocation.
   main.cpp
-C:\Users\albinhasanaj.blom\Desktop\Prog1\OpenGL\OpenGL\main.cpp(252,33): warning C4838: conversion from 'FT_Pos' to 'GLuint' requires a narrowing conversion
-C:\Users\albinhasanaj.blom\Desktop\Prog1\OpenGL\OpenGL\main.cpp(334,28): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
-C:\Users\albinhasanaj.blom\Desktop\Prog1\OpenGL\OpenGL\main.cpp(365,29): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+C:\Users\albinhasanaj.blom\Desktop\Prog1\OpenGL\OpenGL\main.cpp(283,28): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
   OpenGL.vcxproj -> C:\Users\albinhasanaj.blom\Desktop\Prog1\OpenGL\x64\Debug\OpenGL.exe
   'pwsh.exe' is not recognized as an internal or external command,
   operable program or batch file.

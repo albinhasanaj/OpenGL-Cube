@@ -1,3 +1,4 @@
+// Include necessary headers
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
@@ -17,15 +18,15 @@ const unsigned int WIDTH = 800;
 const unsigned int HEIGHT = 600;
 
 // Camera settings
-glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
-glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
+glm::vec3 cameraPos = glm::vec3(0.0f, 16.0f, 48.0f);
+glm::vec3 cameraFront = glm::vec3(0.0f, -0.2f, -1.0f);
 glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
 
 float deltaTime = 0.0f; // Time between current frame and last frame
 float lastFrame = 0.0f;
 
-float yaw = -90.0f;	// Yaw is initialized to -90.0 degrees since a yaw of 0.0 results in a direction vector pointing to the right
-float pitch = 0.0f;
+float yaw = -90.0f;
+float pitch = -10.0f; // Slight downward angle
 float lastX = WIDTH / 2.0f;
 float lastY = HEIGHT / 2.0f;
 float fov = 45.0f;
@@ -40,6 +41,7 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 unsigned int compileShader(unsigned int type, const char* source);
 double statsTracker(GLFWwindow* window, int* totalBlocks);
 void RenderText(unsigned int shader, std::string text, float x, float y, float scale, glm::vec3 color);
+bool isChunkInViewFrustum(const glm::vec3& chunkPos, const glm::mat4& view, const glm::mat4& projection, float chunkSize);
 
 // Struct for character glyphs
 struct Character {
@@ -55,8 +57,11 @@ std::map<GLchar, Character> Characters;
 // VAO and VBO for text rendering
 GLuint textVAO, textVBO;
 
-// Cube VAO, VBO, and EBO
-unsigned int VAO, VBO, EBO;
+// VAOs, VBOs, and EBO for cubes
+unsigned int stoneVAO, stoneVBO;
+unsigned int dirtVAO, dirtVBO;
+unsigned int grassVAO, grassVBO;
+unsigned int EBO;
 
 int main()
 {
@@ -102,7 +107,7 @@ int main()
     #version 330 core
     layout (location = 0) in vec3 aPos; 
     layout (location = 1) in vec3 aColor;
-    
+
     out vec3 ourColor;
 
     uniform mat4 model;
@@ -149,17 +154,46 @@ int main()
 
     // Set up vertex data and buffers and configure vertex attributes
     // --------------------------------------------------------------
-    float vertices[] = {
-        // positions          // colors
-       -0.5f, -0.5f, -0.5f,   1.0f, 0.0f, 0.0f, //0
-        0.5f, -0.5f, -0.5f,   0.0f, 1.0f, 0.0f, //1
-        0.5f,  0.5f, -0.5f,   0.0f, 0.0f, 1.0f, //2
-       -0.5f,  0.5f, -0.5f,   1.0f, 1.0f, 0.0f, //3
-       -0.5f, -0.5f,  0.5f,   1.0f, 0.0f, 1.0f, //4
-        0.5f, -0.5f,  0.5f,   0.0f, 1.0f, 1.0f, //5
-        0.5f,  0.5f,  0.5f,   1.0f, 1.0f, 1.0f, //6
-       -0.5f,  0.5f,  0.5f,   0.0f, 0.0f, 0.0f  //7
+    // Dirt block (brown color)
+    float dirt_vertices[] = {
+        // positions          // colors (brown)
+       -0.5f, -0.5f, -0.5f,   0.6f, 0.3f, 0.0f, //0
+        0.5f, -0.5f, -0.5f,   0.6f, 0.3f, 0.0f, //1
+        0.5f,  0.5f, -0.5f,   0.6f, 0.3f, 0.0f, //2
+       -0.5f,  0.5f, -0.5f,   0.6f, 0.3f, 0.0f, //3
+       -0.5f, -0.5f,  0.5f,   0.6f, 0.3f, 0.0f, //4
+        0.5f, -0.5f,  0.5f,   0.6f, 0.3f, 0.0f, //5
+        0.5f,  0.5f,  0.5f,   0.6f, 0.3f, 0.0f, //6
+       -0.5f,  0.5f,  0.5f,   0.6f, 0.3f, 0.0f  //7
     };
+
+    // Stone block (gray color)
+    float stone_vertices[] = {
+        // positions          // colors (gray)
+       -0.5f, -0.5f, -0.5f,   0.5f, 0.5f, 0.5f, //0
+        0.5f, -0.5f, -0.5f,   0.5f, 0.5f, 0.5f, //1
+        0.5f,  0.5f, -0.5f,   0.5f, 0.5f, 0.5f, //2
+       -0.5f,  0.5f, -0.5f,   0.5f, 0.5f, 0.5f, //3
+       -0.5f, -0.5f,  0.5f,   0.5f, 0.5f, 0.5f, //4
+        0.5f, -0.5f,  0.5f,   0.5f, 0.5f, 0.5f, //5
+        0.5f,  0.5f,  0.5f,   0.5f, 0.5f, 0.5f, //6
+       -0.5f,  0.5f,  0.5f,   0.5f, 0.5f, 0.5f  //7
+    };
+
+    // Grass block (green color)
+    float grass_vertices[] = {
+        // positions          // colors (green)
+       -0.5f, -0.5f, -0.5f,   0.0f, 1.0f, 0.0f, //0
+        0.5f, -0.5f, -0.5f,   0.0f, 1.0f, 0.0f, //1
+        0.5f,  0.5f, -0.5f,   0.0f, 1.0f, 0.0f, //2
+       -0.5f,  0.5f, -0.5f,   0.0f, 1.0f, 0.0f, //3
+       -0.5f, -0.5f,  0.5f,   0.0f, 1.0f, 0.0f, //4
+        0.5f, -0.5f,  0.5f,   0.0f, 1.0f, 0.0f, //5
+        0.5f,  0.5f,  0.5f,   0.0f, 1.0f, 0.0f, //6
+       -0.5f,  0.5f,  0.5f,   0.0f, 1.0f, 0.0f  //7
+    };
+
+    // Indices for EBO
     unsigned int indices[] = {
         0, 1, 2, 2, 3, 0,   // back face
         4, 5, 6, 6, 7, 4,   // front face
@@ -169,18 +203,19 @@ int main()
         1, 2, 6, 6, 5, 1    // right face
     };
 
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
+    // Generate EBO
     glGenBuffers(1, &EBO);
 
-    // Bind the Vertex Array Object first, then bind and set vertex buffer(s), and then configure vertex attribute(s).
-    glBindVertexArray(VAO);
+    // Stone block setup
+    glGenVertexArrays(1, &stoneVAO);
+    glGenBuffers(1, &stoneVBO);
 
-    // Vertex buffer
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    glBindVertexArray(stoneVAO);
 
-    // Element buffer
+    glBindBuffer(GL_ARRAY_BUFFER, stoneVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(stone_vertices), stone_vertices, GL_STATIC_DRAW);
+
+    // Bind EBO
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
@@ -191,137 +226,51 @@ int main()
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
-    // Unbind VAO (it's always a good practice)
-    glBindVertexArray(0);
+    // Dirt block setup
+    glGenVertexArrays(1, &dirtVAO);
+    glGenBuffers(1, &dirtVBO);
 
-    // Initialize FreeType
-    // -------------------
-    FT_Library ft;
-    if (FT_Init_FreeType(&ft)) {
-        std::cout << "ERROR::FREETYPE: Could not init FreeType Library" << std::endl;
-        return -1;
-    }
+    glBindVertexArray(dirtVAO);
 
-    // Load font as face
-    FT_Face face;
-    if (FT_New_Face(ft, "C:/Windows/Fonts/arial.ttf", 0, &face)) {
-        std::cout << "ERROR::FREETYPE: Failed to load font" << std::endl;
-        return -1;
-    }
+    glBindBuffer(GL_ARRAY_BUFFER, dirtVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(dirt_vertices), dirt_vertices, GL_STATIC_DRAW);
 
-    // Set size to load glyphs as
-    FT_Set_Pixel_Sizes(face, 0, 48);
+    // Bind EBO
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    // EBO data is already set, no need to call glBufferData again
 
-    // Disable byte-alignment restriction
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-
-    // Load first 128 characters of ASCII set
-    for (unsigned char c = 0; c < 128; c++)
-    {
-        // Load character glyph 
-        if (FT_Load_Char(face, c, FT_LOAD_RENDER))
-        {
-            std::cout << "ERROR::FREETYPE: Failed to load Glyph " << c << std::endl;
-            continue;
-        }
-        // Generate texture
-        GLuint texture;
-        glGenTextures(1, &texture);
-        glBindTexture(GL_TEXTURE_2D, texture);
-        glTexImage2D(
-            GL_TEXTURE_2D,
-            0,
-            GL_RED,
-            face->glyph->bitmap.width,
-            face->glyph->bitmap.rows,
-            0,
-            GL_RED,
-            GL_UNSIGNED_BYTE,
-            face->glyph->bitmap.buffer
-        );
-        // Set texture options
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        // Store character for later use
-        Character character = {
-            texture,
-            glm::ivec2(face->glyph->bitmap.width, face->glyph->bitmap.rows),
-            glm::ivec2(face->glyph->bitmap_left, face->glyph->bitmap_top),
-            face->glyph->advance.x
-        };
-        Characters.insert(std::pair<GLchar, Character>(c, character));
-    }
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    // Destroy FreeType once we're finished
-    FT_Done_Face(face);
-    FT_Done_FreeType(ft);
-
-    // Configure VAO/VBO for texture quads
-    // -----------------------------------
-    glGenVertexArrays(1, &textVAO);
-    glGenBuffers(1, &textVBO);
-    glBindVertexArray(textVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, textVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 6 * 4, NULL, GL_DYNAMIC_DRAW); // 6 vertices, 4 floats per vertex
+    // Position attribute
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(float), 0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    // Color attribute
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+
+    // Grass block setup
+    glGenVertexArrays(1, &grassVAO);
+    glGenBuffers(1, &grassVBO);
+
+    glBindVertexArray(grassVAO);
+
+    glBindBuffer(GL_ARRAY_BUFFER, grassVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(grass_vertices), grass_vertices, GL_STATIC_DRAW);
+
+    // Bind EBO
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    // EBO data is already set, no need to call glBufferData again
+
+    // Position attribute
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    // Color attribute
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+
+    // Unbind VAO
     glBindVertexArray(0);
 
-    // Compile and setup the shader for text rendering
-    // -----------------------------------------------
-    const char* textVertexShaderSource = R"(
-    #version 330 core
-    layout (location = 0) in vec4 vertex; // <vec2 pos, vec2 tex>
-    out vec2 TexCoords;
-
-    uniform mat4 projection;
-
-    void main()
-    {
-        gl_Position = projection * vec4(vertex.xy, 0.0, 1.0); 
-        TexCoords = vertex.zw;
-    }  
-    )";
-
-    const char* textFragmentShaderSource = R"(
-    #version 330 core
-    in vec2 TexCoords;
-    out vec4 FragColor;
-
-    uniform sampler2D text;
-    uniform vec3 textColor;
-
-    void main()
-    {    
-        vec4 sampled = vec4(1.0, 1.0, 1.0, texture(text, TexCoords).r);
-        FragColor = vec4(textColor, 1.0) * sampled;
-    }  
-    )";
-
-    unsigned int textVertexShader = compileShader(GL_VERTEX_SHADER, textVertexShaderSource);
-    unsigned int textFragmentShader = compileShader(GL_FRAGMENT_SHADER, textFragmentShaderSource);
-
-    unsigned int textShaderProgram = glCreateProgram();
-    glAttachShader(textShaderProgram, textVertexShader);
-    glAttachShader(textShaderProgram, textFragmentShader);
-    glLinkProgram(textShaderProgram);
-    // Check for linking errors
-    glGetProgramiv(textShaderProgram, GL_LINK_STATUS, &success);
-    if (!success) {
-        glGetProgramInfoLog(textShaderProgram, 512, NULL, infoLog);
-        std::cout << "ERROR::TEXT_SHADER::PROGRAM::LINKING_FAILED\n" << infoLog << std::endl;
-    }
-    glDeleteShader(textVertexShader);
-    glDeleteShader(textFragmentShader);
-
-    // Configure projection matrix for text rendering
-    glm::mat4 textProjection = glm::ortho(0.0f, static_cast<float>(WIDTH), 0.0f, static_cast<float>(HEIGHT));
-    glUseProgram(textShaderProgram);
-    glUniformMatrix4fv(glGetUniformLocation(textShaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(textProjection));
+    // Initialize FreeType for text rendering (code omitted for brevity)
+    // ...
 
     // Render loop
     // -----------
@@ -341,7 +290,7 @@ int main()
 
         // Render
         // ------
-        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+        glClearColor(0.53f, 0.81f, 0.92f, 1.0f); // Light sky blue background
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // Activate shader
@@ -361,84 +310,132 @@ int main()
         glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
         glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
 
-        // Initialize the rotation angle (can be updated over time)
-        float rotationAngle = glfwGetTime(); // Uses the current time for continuous rotation
+        // Define the number of chunks for each material
+        int stoneChunks = 13;
+        int dirtChunks = 2;
+        int grassChunks = 1;
+        int totalChunks = stoneChunks + dirtChunks + grassChunks;
+        const int chunkSize = 16;
 
-        // Create the global rotation matrix
-        glm::mat4 rotation = glm::mat4(1.0f);
-        rotation = glm::rotate(rotation, glm::radians(rotationAngle * 20.0f), glm::vec3(0.5f, 1.0f, 0.0f)); // Rotate around the Y-axis
-
-        // Render cubes
-        glBindVertexArray(VAO);
-        int gridSize = 8;
         total_rendered_blocks = 0;
-        for (int x = 0; x < gridSize; x++) {
-            for (int y = 0; y < gridSize; y++) {
-                for (int z = 0; z < gridSize; z++) {
-                    if (x > 0 && x < gridSize - 1 && y > 0 && y < gridSize - 1 && z > 0 && z < gridSize - 1) {
-                        continue; // Do not render the inner cubes
+
+        // Render loop for chunks
+        for (int chunkY = 0; chunkY < totalChunks; chunkY++) {
+
+            // Initialize the chunk data (make it hollow)
+            int chunk[chunkSize][chunkSize][chunkSize];
+
+            for (int x = 0; x < chunkSize; x++) {
+                for (int y = 0; y < chunkSize; y++) {
+                    for (int z = 0; z < chunkSize; z++) {
+                        // Set outer blocks to 1 (solid), inner blocks to 0 (air)
+                        if (x == 0 || x == chunkSize - 1 ||
+                            y == 0 || y == chunkSize - 1 ||
+                            z == 0 || z == chunkSize - 1) {
+                            chunk[x][y][z] = 1; // Solid block
+                        }
+                        else {
+                            chunk[x][y][z] = 0; // Air
+                        }
                     }
+                }
+            }
 
-                    // Create the model matrix for each cube
-                    glm::mat4 model = glm::mat4(1.0f);
-                    model = glm::translate(model, glm::vec3(x * 1.0f, y * 1.0f, z * 1.0f));
+            // Bind the appropriate VAO
+            if (chunkY < stoneChunks) {
+                glBindVertexArray(stoneVAO);
+            }
+            else if (chunkY < stoneChunks + dirtChunks) {
+                glBindVertexArray(dirtVAO);
+            }
+            else {
+                glBindVertexArray(grassVAO);
+            }
 
-                    // Combine the rotation with the model matrix
-                    model = rotation * model;
+            // Frustum culling
+            if (!isChunkInViewFrustum(glm::vec3(0.0f, chunkY * chunkSize, 0.0f), view, projection, chunkSize)) {
+                continue; // Skip rendering if chunk is not in view
+            }
 
-                    // Pass the final model matrix to the shader
-                    glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+            // Render blocks within this chunk
+            for (int x = 0; x < chunkSize; x++) {
+                for (int y = 0; y < chunkSize; y++) {
+                    for (int z = 0; z < chunkSize; z++) {
+                        if (chunk[x][y][z] == 0) continue; // Skip air blocks
 
-                    // Draw the cube
-                    glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
-                    total_rendered_blocks++;
+                        glm::vec3 blockPos(x * 1.0f, (chunkY * chunkSize + y) * 1.0f, z * 1.0f);
+                        glm::mat4 model = glm::translate(glm::mat4(1.0f), blockPos);
+                        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+
+                        // Check and render only the visible faces
+
+                        // Check -X face
+                        if (x == 0 || chunk[x - 1][y][z] == 0) {
+                            // Render left face
+                            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (void*)(24 * sizeof(GLuint)));
+                        }
+
+                        // Check +X face
+                        if (x == chunkSize - 1 || chunk[x + 1][y][z] == 0) {
+                            // Render right face
+                            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (void*)(30 * sizeof(GLuint)));
+                        }
+
+                        // Check -Y face
+                        if (y == 0 || chunk[x][y - 1][z] == 0) {
+                            // Render bottom face
+                            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (void*)(12 * sizeof(GLuint)));
+                        }
+
+                        // Check +Y face
+                        if (y == chunkSize - 1 || chunk[x][y + 1][z] == 0) {
+                            // Render top face
+                            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (void*)(18 * sizeof(GLuint)));
+                        }
+
+                        // Check -Z face
+                        if (z == 0 || chunk[x][y][z - 1] == 0) {
+                            // Render back face
+                            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (void*)(0 * sizeof(GLuint)));
+                        }
+
+                        // Check +Z face
+                        if (z == chunkSize - 1 || chunk[x][y][z + 1] == 0) {
+                            // Render front face
+                            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (void*)(6 * sizeof(GLuint)));
+                        }
+
+                        total_rendered_blocks++;
+                    }
                 }
             }
         }
 
-
-        // Calculate FPS
+        // Calculate FPS and render text (code omitted for brevity)
+		//call the statsTracker function to calculate the FPS and update the window title
         double fps = statsTracker(window, &total_rendered_blocks);
-
-        // Render text
-        glDisable(GL_DEPTH_TEST); // Disable depth testing for text rendering
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-        glUseProgram(textShaderProgram);
-
-        // Update text projection matrix in case window size has changed
-        textProjection = glm::ortho(0.0f, static_cast<float>(WIDTH), 0.0f, static_cast<float>(HEIGHT));
-        glUniformMatrix4fv(glGetUniformLocation(textShaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(textProjection));
-
-        // Render FPS
-        char fpsText[32];
-        snprintf(fpsText, sizeof(fpsText), "FPS: %.1f", fps);
-        RenderText(textShaderProgram, fpsText, 10.0f, HEIGHT - 30.0f, 1.0f, glm::vec3(1.0f));
-
-        // Render block count
-        char blockText[32];
-        snprintf(blockText, sizeof(blockText), "Blocks: %d", total_rendered_blocks);
-        RenderText(textShaderProgram, blockText, 10.0f, HEIGHT - 60.0f, 1.0f, glm::vec3(1.0f));
-
-        glDisable(GL_BLEND);
-        glEnable(GL_DEPTH_TEST); // Re-enable depth testing
 
         // Swap buffers and poll IO events
         glfwSwapBuffers(window);
         glfwPollEvents();
+
+		
     }
 
     // De-allocate resources
     // ---------------------
-    glDeleteVertexArrays(1, &VAO);
-    glDeleteBuffers(1, &VBO);
-    glDeleteBuffers(1, &EBO);
-    glDeleteProgram(shaderProgram);
+    glDeleteVertexArrays(1, &stoneVAO);
+    glDeleteBuffers(1, &stoneVBO);
 
-    glDeleteVertexArrays(1, &textVAO);
-    glDeleteBuffers(1, &textVBO);
-    glDeleteProgram(textShaderProgram);
+    glDeleteVertexArrays(1, &dirtVAO);
+    glDeleteBuffers(1, &dirtVBO);
+
+    glDeleteVertexArrays(1, &grassVAO);
+    glDeleteBuffers(1, &grassVBO);
+
+    glDeleteBuffers(1, &EBO);
+
+    glDeleteProgram(shaderProgram);
 
     // Terminate GLFW
     glfwTerminate();
@@ -456,6 +453,23 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 void processInput(GLFWwindow* window)
 {
     float cameraSpeed = 10.0f * deltaTime;
+    //if click esc show mouse cursor and do not focus on window
+
+	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
+		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+	}
+	else {
+		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	}
+
+    //enable wireframe
+	if (glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS) {
+		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+	}
+	else {
+		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+	}
+
     if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
         cameraSpeed *= 2;
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
@@ -470,6 +484,7 @@ void processInput(GLFWwindow* window)
         cameraPos += cameraSpeed * cameraUp;
     if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS)
         cameraPos -= cameraSpeed * cameraUp;
+
 
     if (glfwGetKey(window, GLFW_KEY_ENTER) == GLFW_PRESS) {
         // Toggle fullscreen
@@ -584,9 +599,6 @@ double statsTracker(GLFWwindow* window, int* totalBlocks)
     return lastFps;  // Return the last valid FPS value, even if not updated this frame
 }
 
-
-
-
 // Function to render text on the screen
 void RenderText(unsigned int shader, std::string text, float x, float y, float scale, glm::vec3 color)
 {
@@ -629,4 +641,32 @@ void RenderText(unsigned int shader, std::string text, float x, float y, float s
     }
     glBindVertexArray(0);
     glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+bool isChunkInViewFrustum(const glm::vec3& chunkPos, const glm::mat4& view, const glm::mat4& projection, float chunkSize) {
+    // Define the 8 corners of the chunk
+    glm::vec3 corners[8];
+    corners[0] = chunkPos;
+    corners[1] = chunkPos + glm::vec3(chunkSize, 0, 0);
+    corners[2] = chunkPos + glm::vec3(0, chunkSize, 0);
+    corners[3] = chunkPos + glm::vec3(0, 0, chunkSize);
+    corners[4] = chunkPos + glm::vec3(chunkSize, chunkSize, 0);
+    corners[5] = chunkPos + glm::vec3(chunkSize, 0, chunkSize);
+    corners[6] = chunkPos + glm::vec3(0, chunkSize, chunkSize);
+    corners[7] = chunkPos + glm::vec3(chunkSize, chunkSize, chunkSize);
+
+    // Check if any of the chunk's corners are inside the view frustum
+    for (int i = 0; i < 8; i++) {
+        glm::vec4 clipSpacePos = projection * view * glm::vec4(corners[i], 1.0f);
+
+        // Perform the frustum check for each corner
+        if (clipSpacePos.x > -clipSpacePos.w && clipSpacePos.x < clipSpacePos.w &&
+            clipSpacePos.y > -clipSpacePos.w && clipSpacePos.y < clipSpacePos.w &&
+            clipSpacePos.z > -clipSpacePos.w && clipSpacePos.z < clipSpacePos.w) {
+            return true; // If any corner is inside the frustum, the chunk is visible
+        }
+    }
+
+    // If no corner is visible, the chunk is not in the view frustum
+    return false;
 }
