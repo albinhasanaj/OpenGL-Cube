@@ -361,6 +361,13 @@ int main()
         glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
         glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
 
+        // Initialize the rotation angle (can be updated over time)
+        float rotationAngle = glfwGetTime(); // Uses the current time for continuous rotation
+
+        // Create the global rotation matrix
+        glm::mat4 rotation = glm::mat4(1.0f);
+        rotation = glm::rotate(rotation, glm::radians(rotationAngle * 20.0f), glm::vec3(0.5f, 1.0f, 0.0f)); // Rotate around the Y-axis
+
         // Render cubes
         glBindVertexArray(VAO);
         int gridSize = 8;
@@ -369,18 +376,26 @@ int main()
             for (int y = 0; y < gridSize; y++) {
                 for (int z = 0; z < gridSize; z++) {
                     if (x > 0 && x < gridSize - 1 && y > 0 && y < gridSize - 1 && z > 0 && z < gridSize - 1) {
-                        continue; // Do not render
+                        continue; // Do not render the inner cubes
                     }
 
+                    // Create the model matrix for each cube
                     glm::mat4 model = glm::mat4(1.0f);
                     model = glm::translate(model, glm::vec3(x * 1.0f, y * 1.0f, z * 1.0f));
+
+                    // Combine the rotation with the model matrix
+                    model = rotation * model;
+
+                    // Pass the final model matrix to the shader
                     glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
 
+                    // Draw the cube
                     glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
                     total_rendered_blocks++;
                 }
             }
         }
+
 
         // Calculate FPS
         double fps = statsTracker(window, &total_rendered_blocks);
